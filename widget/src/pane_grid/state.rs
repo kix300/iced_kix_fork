@@ -2,7 +2,9 @@
 //!
 //! [`PaneGrid`]: super::PaneGrid
 use crate::core::{Point, Size};
-use crate::pane_grid::{Axis, Configuration, Direction, Edge, Node, Pane, Region, Split, Target};
+use crate::pane_grid::{
+    Axis, Configuration, Direction, Edge, Node, Pane, Region, Split, Target,
+};
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -48,7 +50,8 @@ impl<T> State<T> {
     pub fn with_configuration(config: impl Into<Configuration<T>>) -> Self {
         let mut panes = BTreeMap::default();
 
-        let internal = Internal::from_configuration(&mut panes, config.into(), 0);
+        let internal =
+            Internal::from_configuration(&mut panes, config.into(), 0);
 
         State { panes, internal }
     }
@@ -94,27 +97,33 @@ impl<T> State<T> {
     /// Returns the adjacent [`Pane`] of another [`Pane`] in the given
     /// direction, if there is one.
     pub fn adjacent(&self, pane: Pane, direction: Direction) -> Option<Pane> {
-        let regions = self
-            .internal
-            .layout
-            .pane_regions(0.0, 0.0, Size::new(4096.0, 4096.0));
+        let regions = self.internal.layout.pane_regions(
+            0.0,
+            0.0,
+            Size::new(4096.0, 4096.0),
+        );
 
         let current_region = regions.get(&pane)?;
 
         let target = match direction {
-            Direction::Left => Point::new(current_region.x - 1.0, current_region.y + 1.0),
+            Direction::Left => {
+                Point::new(current_region.x - 1.0, current_region.y + 1.0)
+            }
             Direction::Right => Point::new(
                 current_region.x + current_region.width + 1.0,
                 current_region.y + 1.0,
             ),
-            Direction::Up => Point::new(current_region.x + 1.0, current_region.y - 1.0),
+            Direction::Up => {
+                Point::new(current_region.x + 1.0, current_region.y - 1.0)
+            }
             Direction::Down => Point::new(
                 current_region.x + 1.0,
                 current_region.y + current_region.height + 1.0,
             ),
         };
 
-        let mut colliding_regions = regions.iter().filter(|(_, region)| region.contains(target));
+        let mut colliding_regions =
+            regions.iter().filter(|(_, region)| region.contains(target));
 
         let (pane, _) = colliding_regions.next()?;
 
@@ -123,8 +132,15 @@ impl<T> State<T> {
 
     /// Splits the given [`Pane`] into two in the given [`Axis`] and
     /// initializing the new [`Pane`] with the provided internal state.
-    pub fn split(&mut self, axis: Axis, pane: Pane, state: T) -> Option<(Pane, Split)> {
-        self.split_node(axis, Some(pane), state, false)
+    pub fn split(
+        &mut self,
+        axis: Axis,
+        pane: Pane,
+        state: T,
+        ratio: Option<f32>,
+    ) -> Option<(Pane, Split)> {
+        self.split_node(axis, Some(pane), state, false, ratio.unwrap_or(0.5))
+
     }
 
     /// Split a target [`Pane`] with a given [`Pane`] on a given [`Region`].
@@ -135,17 +151,18 @@ impl<T> State<T> {
             Region::Center => self.swap(pane, target),
             Region::Edge(edge) => match edge {
                 Edge::Top => {
-                    self.split_and_swap(Axis::Horizontal, target, pane, true);
+                    self.split_and_swap(Axis::Horizontal, target, pane, true, 0.5);
                 }
                 Edge::Bottom => {
-                    self.split_and_swap(Axis::Horizontal, target, pane, false);
+                    self.split_and_swap(Axis::Horizontal, target, pane, false, 0.5);
                 }
                 Edge::Left => {
-                    self.split_and_swap(Axis::Vertical, target, pane, true);
+                    self.split_and_swap(Axis::Vertical, target, pane, true, 0.5);
                 }
                 Edge::Right => {
-                    self.split_and_swap(Axis::Vertical, target, pane, false);
+                    self.split_and_swap(Axis::Vertical, target, pane, false, 0.5);
                 }
+
             },
         }
     }
@@ -166,6 +183,7 @@ impl<T> State<T> {
         pane: Option<Pane>,
         state: T,
         inverse: bool,
+        ratio: f32,
     ) -> Option<(Pane, Split)> {
         let node = if let Some(pane) = pane {
             self.internal.layout.find(pane)?
@@ -187,9 +205,9 @@ impl<T> State<T> {
         };
 
         if inverse {
-            node.split_inverse(new_split, axis, new_pane);
+            node.split_inverse(new_split, axis, new_pane, ratio);
         } else {
-            node.split(new_split, axis, new_pane);
+            node.split(new_split, axis, new_pane, ratio);
         }
 
         let _ = self.panes.insert(new_pane, state);
@@ -198,9 +216,16 @@ impl<T> State<T> {
         Some((new_pane, new_split))
     }
 
-    fn split_and_swap(&mut self, axis: Axis, target: Pane, pane: Pane, swap: bool) {
+    fn split_and_swap(
+        &mut self,
+        axis: Axis,
+        target: Pane,
+        pane: Pane,
+        swap: bool,
+        ratio: f32,
+    ) {
         if let Some((state, _)) = self.close(pane)
-            && let Some((new_pane, _)) = self.split(axis, target, state)
+            && let Some((new_pane, _)) = self.split_node(axis, Some(target), state, false, ratio)
         {
             // Ensure new node corresponds to original closed `Pane` for state continuity
             self.relabel(new_pane, pane);
@@ -217,23 +242,30 @@ impl<T> State<T> {
     pub fn move_to_edge(&mut self, pane: Pane, edge: Edge) {
         match edge {
             Edge::Top => {
-                self.split_major_node_and_swap(Axis::Horizontal, pane, true);
+                self.split_major_node_and_swap(Axis::Horizontal, pane, true, 0.5);
             }
             Edge::Bottom => {
-                self.split_major_node_and_swap(Axis::Horizontal, pane, false);
+                self.split_major_node_and_swap(Axis::Horizontal, pane, false, 0.5);
             }
             Edge::Left => {
-                self.split_major_node_and_swap(Axis::Vertical, pane, true);
+                self.split_major_node_and_swap(Axis::Vertical, pane, true, 0.5);
             }
             Edge::Right => {
-                self.split_major_node_and_swap(Axis::Vertical, pane, false);
+                self.split_major_node_and_swap(Axis::Vertical, pane, false, 0.5);
             }
         }
     }
 
-    fn split_major_node_and_swap(&mut self, axis: Axis, pane: Pane, inverse: bool) {
+    fn split_major_node_and_swap(
+        &mut self,
+        axis: Axis,
+        pane: Pane,
+        inverse: bool,
+        ratio: f32,
+    ) {
         if let Some((state, _)) = self.close(pane)
-            && let Some((new_pane, _)) = self.split_node(axis, None, state, inverse)
+            && let Some((new_pane, _)) =
+                self.split_node(axis, None, state, inverse, ratio)
         {
             // Ensure new node corresponds to original closed `Pane` for state continuity
             self.relabel(new_pane, pane);

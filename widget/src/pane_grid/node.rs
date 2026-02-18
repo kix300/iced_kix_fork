@@ -160,7 +160,9 @@ impl Node {
 
     pub(crate) fn find(&mut self, pane: Pane) -> Option<&mut Node> {
         match self {
-            Node::Split { a, b, .. } => a.find(pane).or_else(move || b.find(pane)),
+            Node::Split { a, b, .. } => {
+                a.find(pane).or_else(move || b.find(pane))
+            }
             Node::Pane(p) => {
                 if *p == pane {
                     Some(self)
@@ -170,22 +172,21 @@ impl Node {
             }
         }
     }
-
-    pub(crate) fn split(&mut self, id: Split, axis: Axis, new_pane: Pane) {
+    pub(crate) fn split(&mut self, id: Split, axis: Axis, new_pane: Pane, ratio: f32) {
         *self = Node::Split {
             id,
             axis,
-            ratio: 0.5,
+            ratio,
             a: Box::new(self.clone()),
             b: Box::new(Node::Pane(new_pane)),
         };
     }
 
-    pub(crate) fn split_inverse(&mut self, id: Split, axis: Axis, pane: Pane) {
+    pub(crate) fn split_inverse(&mut self, id: Split, axis: Axis, pane: Pane, ratio: f32) {
         *self = Node::Split {
             id,
             axis,
-            ratio: 0.5,
+            ratio,
             a: Box::new(Node::Pane(pane)),
             b: Box::new(self.clone()),
         };
@@ -270,7 +271,9 @@ impl Node {
                 },
             ) => {
                 let (a_factor, b_factor) = match axis {
-                    Axis::Horizontal => (count_a.horizontal(), count_b.horizontal()),
+                    Axis::Horizontal => {
+                        (count_a.horizontal(), count_b.horizontal())
+                    }
                     Axis::Vertical => (count_a.vertical(), count_b.vertical()),
                 };
 
@@ -278,12 +281,18 @@ impl Node {
                     current,
                     *ratio,
                     spacing,
-                    min_size * (a_factor + 1) as f32 + spacing * a_factor as f32,
-                    min_size * (b_factor + 1) as f32 + spacing * b_factor as f32,
+                    min_size * (a_factor + 1) as f32
+                        + spacing * a_factor as f32,
+                    min_size * (b_factor + 1) as f32
+                        + spacing * b_factor as f32,
                 );
 
-                a.compute_regions(spacing, min_size, &region_a, count_a, regions);
-                b.compute_regions(spacing, min_size, &region_b, count_b, regions);
+                a.compute_regions(
+                    spacing, min_size, &region_a, count_a, regions,
+                );
+                b.compute_regions(
+                    spacing, min_size, &region_b, count_b, regions,
+                );
             }
             (Node::Pane(pane), Count::Pane) => {
                 let _ = regions.insert(*pane, *current);
@@ -318,7 +327,9 @@ impl Node {
                 },
             ) => {
                 let (a_factor, b_factor) = match axis {
-                    Axis::Horizontal => (count_a.horizontal(), count_b.horizontal()),
+                    Axis::Horizontal => {
+                        (count_a.horizontal(), count_b.horizontal())
+                    }
                     Axis::Vertical => (count_a.vertical(), count_b.vertical()),
                 };
 
@@ -326,8 +337,10 @@ impl Node {
                     current,
                     *ratio,
                     spacing,
-                    min_size * (a_factor + 1) as f32 + spacing * a_factor as f32,
-                    min_size * (b_factor + 1) as f32 + spacing * b_factor as f32,
+                    min_size * (a_factor + 1) as f32
+                        + spacing * a_factor as f32,
+                    min_size * (b_factor + 1) as f32
+                        + spacing * b_factor as f32,
                 );
 
                 let _ = splits.insert(*id, (*axis, *current, ratio));
