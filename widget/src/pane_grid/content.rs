@@ -422,7 +422,8 @@ where
             title_bar.is_over_pick_area(title_bar_layout, cursor_position)
         } else {
             //Kix Change bug with button may occur
-            layout.bounds().contains(cursor_position)
+            // layout.bounds().contains(cursor_position)
+            false
         }
     }
 }
